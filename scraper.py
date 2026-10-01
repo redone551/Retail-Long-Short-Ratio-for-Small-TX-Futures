@@ -20,7 +20,7 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    url = "https://www.wantgoo.com/futures/retail-indicator/wtm&"
+    url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
