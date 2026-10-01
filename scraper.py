@@ -52,7 +52,7 @@ def fetch_data():
 def main():
     today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
     
-    max_retries = 24  # 每 5 分鐘一次，最多嘗試 2 Hours (24次)
+    max_retries = 36  # 每 5 分鐘一次，最多嘗試 2 Hours (24次)
     interval_seconds = 300 # 5 分鐘
     
     print(f"開始執行輪詢，目標日期: {today_str}")
