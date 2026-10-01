@@ -7,8 +7,8 @@ from datetime import datetime, timezone, timedelta
 TZ_TW = timezone(timedelta(hours=8))
 
 # 1. Telegram 通知設定 (需替換為你的 Token 與 Chat ID)
-TELEGRAM_BOT_TOKEN = "8690257630:AAHbWsmER4ZGxiaVCGd151bk8ljbg_uxztI"
-TELEGRAM_CHAT_ID = "984292295"
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8690257630:AAHbWsmER4ZGxiaVCGd151bk8ljbg_uxztI")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "984292295")
 
 def send_telegram_msg(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
