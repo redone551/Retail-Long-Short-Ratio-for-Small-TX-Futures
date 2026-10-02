@@ -57,7 +57,7 @@ def fetch_data():
 
 def main():
    today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
-    print(f"檢查日期: {today_str}")
+   print(f"檢查日期: {today_str}")
     
     try:
         data = fetch_data()
