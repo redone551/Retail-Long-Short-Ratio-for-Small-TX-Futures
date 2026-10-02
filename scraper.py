@@ -55,9 +55,6 @@ def fetch_data():
     return None
 
 def main():
-    # 1. 程式一啟動立刻發送測試訊息，確認 Telegram 連線正常
-    send_telegram_msg("測試：GitHub Actions 爬蟲程式已成功啟動！")
-    
     today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
     max_retries = 24  # 最多嘗試 2 小時 (24 次)
     interval_seconds = 300  # 間隔 5 分鐘
