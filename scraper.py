@@ -40,13 +40,16 @@ def fetch_data():
             print("找不到表格")
             return None
 
-        # 解析第一行資料 (最新一日)
-        rows = table.find('tbody').find_all('tr') if table.find('tbody') else table.find_all('tr')[1:]
+        # 找到 tbody 中的第一列 (最新日期的資料)
+        tbody = table.find('tbody')
+        rows = tbody.find_all('tr') if tbody else table.find_all('tr')[1:]
+        
         if rows:
-            cols = [td.text.strip() for td in rows[0].find_all(['td', 'th'])]
+            # 抓取第一列中所有的 th 及 td 子元素
+            cols = [cell.text.strip() for cell in rows[0].find_all(['th', 'td'])]
+            
             # 欄位依序為：日期、加權指數、散戶多單、散戶空單、散戶淨部位、散戶多空比
             if len(cols) >= 6:
-                # 日期格式為 2026-10-02 轉換為 2026/10/02
                 date_formatted = cols[0].replace("-", "/")
                 return {
                     "date": date_formatted,
@@ -55,6 +58,8 @@ def fetch_data():
                     "short": cols[3],
                     "ratio": cols[5]
                 }
+            else:
+                print(f"欄位數量不足，實際抓到 {len(cols)} 個欄位: {cols}")
     except Exception as e:
         print(f"解析發生錯誤: {e}")
         
