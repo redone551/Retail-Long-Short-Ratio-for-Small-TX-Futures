@@ -22,7 +22,8 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    url = "https://blave.org/api/studio/twstock/market/futures-retail-long-short-ratio?symbol=wtm"
+    # 修正：futures_retail_long_short_ratio (使用底線)
+    url = "https://blave.org/api/studio/twstock/market/futures_retail_long_short_ratio?symbol=wtm"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
