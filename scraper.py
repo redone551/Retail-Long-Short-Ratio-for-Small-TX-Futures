@@ -1,7 +1,7 @@
 import os
 import requests
+from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
-from playwright.sync_api import sync_playwright
 
 # 設定台灣時區 (UTC+8)
 TZ_TW = timezone(timedelta(hours=8))
@@ -23,59 +23,42 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
-    captured_data = []
-
-    def handle_response(response):
-        # 只要攔截到含有 wtm-data 的成功回應，就解析並儲存
-        if "wtm-data" in response.url and response.status == 200:
-            try:
-                nonlocal captured_data
-                data = response.json()
-                if isinstance(data, list) and len(data) > 0:
-                    captured_data = data
-            except Exception as e:
-                print(f"解析背景 API 失敗: {e}")
-
+    url = "https://blave.org/studio/twstock/zh/market/futures_retail_long_short_ratio"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = context.new_page()
-            
-            # 在 goto 前先註冊監聽器，確保不會錯過任何 API 回應
-            page.on("response", handle_response)
-            
-            print("正在透過瀏覽器載入玩股網頁面...")
-            page.goto(url, wait_until="domcontentloaded", timeout=25000)
-            
-            # 輪詢最多等待 10 秒，直到 captured_data 拿到資料
-            for _ in range(20):
-                if captured_data:
-                    break
-                page.wait_for_timeout(500)
-            
-            browser.close()
-            
-            if captured_data:
-                latest = captured_data[0]
-                raw_date = str(latest.get("date", "")).replace("-", "/")
-                return {
-                    "date": raw_date,
-                    "price": str(latest.get("price", "")),
-                    "long": str(latest.get("long", "")),
-                    "short": str(latest.get("short", "")),
-                    "ratio": str(latest.get("ratio", ""))
-                }
-            else:
-                print("未擷取到有效的 API 資料")
-                return None
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            print(f"請求失敗，HTTP 狀態碼: {response.status_code}")
+            return None
 
+        soup = BeautifulSoup(response.text, 'html.parser')
+        table = soup.find('table')
+        if not table:
+            print("找不到表格")
+            return None
+
+        # 解析第一行資料 (最新一日)
+        rows = table.find('tbody').find_all('tr') if table.find('tbody') else table.find_all('tr')[1:]
+        if rows:
+            cols = [td.text.strip() for td in rows[0].find_all(['td', 'th'])]
+            # 欄位依序為：日期、加權指數、散戶多單、散戶空單、散戶淨部位、散戶多空比
+            if len(cols) >= 6:
+                # 日期格式為 2026-10-02 轉換為 2026/10/02
+                date_formatted = cols[0].replace("-", "/")
+                return {
+                    "date": date_formatted,
+                    "price": cols[1],
+                    "long": cols[2],
+                    "short": cols[3],
+                    "ratio": cols[5]
+                }
     except Exception as e:
-        print(f"Playwright 執行失敗: {e}")
-        return None
+        print(f"解析發生錯誤: {e}")
+        
+    return None
 
 def main():
     today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
@@ -89,9 +72,9 @@ def main():
             msg = (
                 f"【微台指散戶多空比已更新】\n"
                 f"日期：{data['date']}\n"
-                f"收盤價：{data['price']}\n"
-                f"散戶多空比：{data['ratio']}%\n"
-                f"做多：{data['long']} | 做空：{data['short']}"
+                f"加權指數：{data['price']}\n"
+                f"散戶多空比：{data['ratio']}\n"
+                f"做多：{data['long']} 口 | 做空：{data['short']} 口"
             )
             send_telegram_msg(msg)
             print("已成功發送通知！")
