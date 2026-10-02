@@ -25,31 +25,42 @@ def send_telegram_msg(message):
 
 def fetch_data():
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
+    
+    session = requests.Session()
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.wantgoo.com/",
+        "Connection": "keep-alive"
     }
-    response = requests.get(url, headers=headers, timeout=15)
-    if response.status_code != 200:
-        print(f"網頁請求失敗，HTTP 狀態碼: {response.status_code}")
-        return None
+    
+    try:
+        response = session.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            print(f"網頁請求失敗，HTTP 狀態碼: {response.status_code}")
+            return None
 
-    soup = BeautifulSoup(response.text, 'html.parser')
-    table = soup.find('table')
-    if not table:
-        print("找不到資料表格")
-        return None
+        soup = BeautifulSoup(response.text, 'html.parser')
+        table = soup.find('table')
+        if not table:
+            print("找不到資料表格")
+            return None
 
-    rows = table.find('tbody').find_all('tr') if table.find('tbody') else table.find_all('tr')[1:]
-    for row in rows:
-        cols = [td.text.strip() for td in row.find_all(['td', 'th'])]
-        if len(cols) >= 5:
-            return {
-                "date": cols[0].strip(),
-                "price": cols[1].strip(),
-                "long": cols[2].strip(),
-                "short": cols[3].strip(),
-                "ratio": cols[4].strip()
-            }
+        rows = table.find('tbody').find_all('tr') if table.find('tbody') else table.find_all('tr')[1:]
+        for row in rows:
+            cols = [td.text.strip() for td in row.find_all(['td', 'th'])]
+            if len(cols) >= 5:
+                return {
+                    "date": cols[0].strip(),
+                    "price": cols[1].strip(),
+                    "long": cols[2].strip(),
+                    "short": cols[3].strip(),
+                    "ratio": cols[4].strip()
+                }
+    except Exception as e:
+        print(f"請求發生例外錯誤: {e}")
+        
     return None
 
 def main():
