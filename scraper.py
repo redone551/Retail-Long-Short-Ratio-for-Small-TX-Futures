@@ -24,42 +24,49 @@ def send_telegram_msg(message):
 
 def fetch_data():
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
-    
+    api_data = []
+
+    def handle_response(response):
+        # 攔截玩股網背景發送的 wtm-data API
+        if "wtm-data" in response.url and response.status == 200:
+            try:
+                nonlocal api_data
+                api_data = response.json()
+            except Exception as e:
+                print(f"解析背景 API JSON 失敗: {e}")
+
     try:
         with sync_playwright() as p:
-            # 啟動真實 Chromium 瀏覽器
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
             
-            print("正在透過瀏覽器載入玩股網頁面...")
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            # 監聽網路回應，自動捕捉背景 API 資料
+            page.on("response", handle_response)
             
-            # 等待表格渲染完成
-            page.wait_for_selector("table", timeout=15000)
-            
-            # 直接從頁面提取第一列表格數據
-            first_row = page.locator("table tbody tr").first
-            cols = first_row.locator("td").all_inner_texts()
+            print("正在透過瀏覽器載入玩股網頁面並攔截 API...")
+            page.goto(url, wait_until="networkidle", timeout=30000)
             
             browser.close()
             
-            if len(cols) >= 5:
+            if api_data and isinstance(api_data, list) and len(api_data) > 0:
+                latest = api_data[0]
+                raw_date = str(latest.get("date", "")).replace("-", "/")
                 return {
-                    "date": cols[0].strip(),
-                    "price": cols[1].strip(),
-                    "long": cols[2].strip(),
-                    "short": cols[3].strip(),
-                    "ratio": cols[4].strip()
+                    "date": raw_date,
+                    "price": str(latest.get("price", "")),
+                    "long": str(latest.get("long", "")),
+                    "short": str(latest.get("short", "")),
+                    "ratio": str(latest.get("ratio", ""))
                 }
             else:
-                print("表格欄位不足")
+                print("未攔截到有效的 API 資料")
                 return None
 
     except Exception as e:
-        print(f"Playwright 抓取表格失敗: {e}")
+        print(f"Playwright 攔截執行失敗: {e}")
         return None
 
 def main():
