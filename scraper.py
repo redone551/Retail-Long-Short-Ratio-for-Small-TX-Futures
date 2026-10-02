@@ -1,6 +1,5 @@
 import os
-import time
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 
@@ -18,7 +17,9 @@ def send_telegram_msg(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
     try:
-        res = requests.post(url, data=payload, timeout=10)
+        # 使用普通的 requests 或 cloudscraper 皆可發送 Telegram
+        scraper = cloudscraper.create_scraper()
+        res = scraper.post(url, data=payload, timeout=10)
         print(f"Telegram API 回應: {res.status_code}, {res.text}")
     except Exception as e:
         print(f"發送通知失敗: {e}")
@@ -26,17 +27,17 @@ def send_telegram_msg(message):
 def fetch_data():
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
     
-    session = requests.Session()
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.wantgoo.com/",
-        "Connection": "keep-alive"
-    }
+    # 建立 cloudscraper 實例，模擬真實瀏覽器挑戰驗證
+    scraper = cloudscraper.create_scraper(
+        browser={
+            'browser': 'chrome',
+            'platform': 'windows',
+            'desktop': True
+        }
+    )
     
     try:
-        response = session.get(url, headers=headers, timeout=15)
+        response = scraper.get(url, timeout=15)
         if response.status_code != 200:
             print(f"網頁請求失敗，HTTP 狀態碼: {response.status_code}")
             return None
