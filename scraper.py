@@ -24,45 +24,42 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    # 修正網址：移除末尾多餘的 &
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    
     response = requests.get(url, headers=headers, timeout=15)
     if response.status_code != 200:
         print(f"網頁請求失敗，HTTP 狀態碼: {response.status_code}")
         return None
-    
+
     soup = BeautifulSoup(response.text, 'html.parser')
     table = soup.find('table')
     if not table:
         print("找不到資料表格")
         return None
-        
+
     rows = table.find('tbody').find_all('tr') if table.find('tbody') else table.find_all('tr')[1:]
     for row in rows:
         cols = [td.text.strip() for td in row.find_all(['td', 'th'])]
-    
-    if len(cols) >= 5:
-        return {
-    "date": cols[0].strip(),
-    "price": cols[1].strip(),
-    "long": cols[2].strip(),
-    "short": cols[3].strip(),
-    "ratio": cols[4].strip()
-}
+        if len(cols) >= 5:
+            return {
+                "date": cols[0].strip(),
+                "price": cols[1].strip(),
+                "long": cols[2].strip(),
+                "short": cols[3].strip(),
+                "ratio": cols[4].strip()
+            }
     return None
 
 def main():
-   today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
-   print(f"檢查日期: {today_str}")
-    
+    today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
+    print(f"檢查日期: {today_str}")
+
     try:
         data = fetch_data()
         print(f"爬取結果: {data}")
-        
+
         if data and data['date'] == today_str:
             msg = (
                 f"【微台指散戶多空比已更新】\n"
