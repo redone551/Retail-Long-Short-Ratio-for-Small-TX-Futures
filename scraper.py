@@ -51,6 +51,8 @@ def fetch_data():
     return None
 
 def main():
+    send_telegram_msg("測試：GitHub Actions 程式已啟動！") # 先測試通知是否正常
+    
     today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
     
     max_retries = 36  # 每 5 分鐘一次，最多嘗試 2 Hours (24次)
