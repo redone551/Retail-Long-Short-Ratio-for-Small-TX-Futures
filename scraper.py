@@ -24,7 +24,19 @@ def send_telegram_msg(message):
 
 def fetch_data():
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
-    
+    captured_data = []
+
+    def handle_response(response):
+        # 只要攔截到含有 wtm-data 的成功回應，就解析並儲存
+        if "wtm-data" in response.url and response.status == 200:
+            try:
+                nonlocal captured_data
+                data = response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    captured_data = data
+            except Exception as e:
+                print(f"解析背景 API 失敗: {e}")
+
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -33,21 +45,22 @@ def fetch_data():
             )
             page = context.new_page()
             
+            # 在 goto 前先註冊監聽器，確保不會錯過任何 API 回應
+            page.on("response", handle_response)
+            
             print("正在透過瀏覽器載入玩股網頁面...")
+            page.goto(url, wait_until="domcontentloaded", timeout=25000)
             
-            # 監聽特地目標：等待包含 wtm-data 的 API 回應
-            with page.expect_response(lambda response: "wtm-data" in response.url and response.status == 200, timeout=20000) as response_info:
-                # 使用 domcontentloaded 避免被網頁廣告/追蹤封包拖到逾時
-                page.goto(url, wait_until="domcontentloaded", timeout=20000)
-            
-            # 取得 API 的 JSON 結果
-            api_response = response_info.value
-            api_data = api_response.json()
+            # 輪詢最多等待 10 秒，直到 captured_data 拿到資料
+            for _ in range(20):
+                if captured_data:
+                    break
+                page.wait_for_timeout(500)
             
             browser.close()
             
-            if api_data and isinstance(api_data, list) and len(api_data) > 0:
-                latest = api_data[0]
+            if captured_data:
+                latest = captured_data[0]
                 raw_date = str(latest.get("date", "")).replace("-", "/")
                 return {
                     "date": raw_date,
@@ -57,11 +70,11 @@ def fetch_data():
                     "ratio": str(latest.get("ratio", ""))
                 }
             else:
-                print("未攔截到有效的 API 資料")
+                print("未擷取到有效的 API 資料")
                 return None
 
     except Exception as e:
-        print(f"Playwright 攔截執行失敗: {e}")
+        print(f"Playwright 執行失敗: {e}")
         return None
 
 def main():
