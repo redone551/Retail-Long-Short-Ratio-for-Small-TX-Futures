@@ -1,6 +1,7 @@
 import os
 import requests
 from datetime import datetime, timezone, timedelta
+from playwright.sync_api import sync_playwright
 
 # 設定台灣時區 (UTC+8)
 TZ_TW = timezone(timedelta(hours=8))
@@ -22,44 +23,50 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    # 直接請求玩股網微台指散戶多空比的 API 端點
-    url = "https://www.wantgoo.com/investor/retail-indicator/wtm-data"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://www.wantgoo.com/futures/retail-indicator/wtm",
-        "X-Requested-With": "XMLHttpRequest"
-    }
+    url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
+    api_url = "https://www.wantgoo.com/investor/retail-indicator/wtm-data"
     
     try:
-        response = requests.get(url, headers=headers, timeout=15)
-        if response.status_code != 200:
-            print(f"API 請求失敗，HTTP 狀態碼: {response.status_code}")
-            return None
+        with sync_playwright() as p:
+            # 啟動真實 Chromium 瀏覽器，開啟過濾驗證防護機制
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+            
+            # 先存取主頁面讓 Cloudflare 通過 Cookie 驗證
+            print("正在透過瀏覽器載入玩股網...")
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(3000) # 等待 3 秒通過驗證
+            
+            # 透過瀏覽器內部的 fetch 直接請求 API
+            response_json = page.evaluate(f"""
+                async () => {{
+                    const res = await fetch('{api_url}');
+                    return await res.json();
+                }}
+            """)
+            
+            browser.close()
+            
+            if response_json and isinstance(response_json, list) and len(response_json) > 0:
+                latest = response_json[0]
+                raw_date = str(latest.get("date", "")).replace("-", "/")
+                return {
+                    "date": raw_date,
+                    "price": str(latest.get("price", "")),
+                    "long": str(latest.get("long", "")),
+                    "short": str(latest.get("short", "")),
+                    "ratio": str(latest.get("ratio", ""))
+                }
+            else:
+                print("API 回傳格式不符或無資料")
+                return None
 
-        data = response.json()
-        if not data or not isinstance(data, list):
-            print("API 未回傳有效的 JSON 陣列")
-            return None
-
-        # 取得最新的第一筆資料
-        latest = data[0]
-        
-        # 處理日期格式 (例如 API 回傳 "2026-10-02" 轉成 "2026/10/02")
-        raw_date = str(latest.get("date", "")).replace("-", "/")
-        
-        return {
-            "date": raw_date,
-            "price": str(latest.get("price", "")),
-            "long": str(latest.get("long", "")),
-            "short": str(latest.get("short", "")),
-            "ratio": str(latest.get("ratio", ""))
-        }
     except Exception as e:
-        print(f"請求 API 發生例外錯誤: {e}")
-        
-    return None
+        print(f"Playwright 執行失敗: {e}")
+        return None
 
 def main():
     today_str = datetime.now(TZ_TW).strftime("%Y/%m/%d")
