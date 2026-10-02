@@ -24,48 +24,42 @@ def send_telegram_msg(message):
 
 def fetch_data():
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
-    api_url = "https://www.wantgoo.com/investor/retail-indicator/wtm-data"
     
     try:
         with sync_playwright() as p:
-            # 啟動真實 Chromium 瀏覽器，開啟過濾驗證防護機制
+            # 啟動真實 Chromium 瀏覽器
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
             
-            # 先存取主頁面讓 Cloudflare 通過 Cookie 驗證
-            print("正在透過瀏覽器載入玩股網...")
+            print("正在透過瀏覽器載入玩股網頁面...")
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(3000) # 等待 3 秒通過驗證
             
-            # 透過瀏覽器內部的 fetch 直接請求 API
-            response_json = page.evaluate(f"""
-                async () => {{
-                    const res = await fetch('{api_url}');
-                    return await res.json();
-                }}
-            """)
+            # 等待表格渲染完成
+            page.wait_for_selector("table", timeout=15000)
+            
+            # 直接從頁面提取第一列表格數據
+            first_row = page.locator("table tbody tr").first
+            cols = first_row.locator("td").all_inner_texts()
             
             browser.close()
             
-            if response_json and isinstance(response_json, list) and len(response_json) > 0:
-                latest = response_json[0]
-                raw_date = str(latest.get("date", "")).replace("-", "/")
+            if len(cols) >= 5:
                 return {
-                    "date": raw_date,
-                    "price": str(latest.get("price", "")),
-                    "long": str(latest.get("long", "")),
-                    "short": str(latest.get("short", "")),
-                    "ratio": str(latest.get("ratio", ""))
+                    "date": cols[0].strip(),
+                    "price": cols[1].strip(),
+                    "long": cols[2].strip(),
+                    "short": cols[3].strip(),
+                    "ratio": cols[4].strip()
                 }
             else:
-                print("API 回傳格式不符或無資料")
+                print("表格欄位不足")
                 return None
 
     except Exception as e:
-        print(f"Playwright 執行失敗: {e}")
+        print(f"Playwright 抓取表格失敗: {e}")
         return None
 
 def main():
