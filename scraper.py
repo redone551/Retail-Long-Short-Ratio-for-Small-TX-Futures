@@ -1,5 +1,7 @@
 import os
+import json
 import requests
+from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 
 # 設定台灣時區 (UTC+8)
@@ -22,63 +24,68 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    # 台灣期貨交易所 (Taifex) 官方每日交易資訊 Open Data API
-    url = "https://openapi.taifex.com.tw/v1/DailyMarketReport"
+    blave_url = "https://blave.org/studio/twstock/zh/market/futures_retail_long_short_ratio"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
-        # 先從期交所每日統計或散戶多空比 API 端點獲取資料
-        # 若需要精準散戶多空比，直接抓取 Blave 前端靜態頁面數據 (帶完整的標準網頁 Request)
-        blave_url = "https://blave.org/studio/twstock/zh/market/futures_retail_long_short_ratio"
-        
-        # 使用 requests 抓取 Blave 頁面並透過解析內嵌的 Next.js / React State 數據
         res = requests.get(blave_url, headers=headers, timeout=15)
-        if res.status_code == 200 and "__NEXT_DATA__" in res.text:
-            import json
-            from bs4 import BeautifulSoup
+        if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
+            
+            # 優先方案 1: 解析 Next.js __NEXT_DATA__ SSR 數據
             next_data_script = soup.find("script", id="__NEXT_DATA__")
-            if next_data_script:
-                json_obj = json.loads(next_data_script.string)
-                # 從 SSR React hydration state 讀取第一筆數據
-                props = json_obj.get("props", {}).get("pageProps", {})
-                items = props.get("data", []) or props.get("initialData", [])
-                
-                if items and isinstance(items, list):
-                    latest = items[0]
-                    raw_date = str(latest.get("date", "")).replace("-", "/")
+            if next_data_script and next_data_script.string:
+                try:
+                    json_obj = json.loads(next_data_script.string)
+                    page_props = json_obj.get("props", {}).get("pageProps", {})
+                    items = page_props.get("data") or page_props.get("initialData") or []
                     
-                    price = f"{latest.get('close', 0):,}" if latest.get('close') else str(latest.get('price', ''))
-                    long_cnt = f"{latest.get('long', 0):,}" if latest.get('long') else str(latest.get('long', ''))
-                    short_cnt = f"{latest.get('short', 0):,}" if latest.get('short') else str(latest.get('short', ''))
-                    ratio = f"{latest.get('ratio', 0):+.2f}%" if latest.get('ratio') is not None else str(latest.get('ratio', ''))
-                    
-                    return {
-                        "date": raw_date,
-                        "price": price,
-                        "long": long_cnt,
-                        "short": short_cnt,
-                        "ratio": ratio
-                    }
-        
-        # 備用方案：解析 Blave HTML 上的表格列數據
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(res.text, "html.parser")
-        first_row = soup.find("table").find("tbody").find("tr") if soup.find("table") else None
-        if first_row:
-            cols = [td.text.strip() for td in first_row.find_all(["td", "th"])]
-            if len(cols) >= 6:
-                return {
-                    "date": cols[0].replace("-", "/"),
-                    "price": cols[1],
-                    "long": cols[2],
-                    "short": cols[3],
-                    "ratio": cols[5]
-                }
+                    if items and isinstance(items, list):
+                        latest = items[0]
+                        raw_date = str(latest.get("date", "")).replace("-", "/")
+                        
+                        # 相容各種可能指稱加權指數/價格的 Key (close, twse, taiex, price, index)
+                        p_val = latest.get('close') or latest.get('twse') or latest.get('taiex') or latest.get('price') or latest.get('index') or 0
+                        price_str = f"{int(p_val):,}" if isinstance(p_val, (int, float)) and p_val > 0 else str(p_val)
+                        
+                        long_val = latest.get('long', 0)
+                        short_val = latest.get('short', 0)
+                        ratio_val = latest.get('ratio', 0)
+                        
+                        long_str = f"{int(long_val):,}" if isinstance(long_val, (int, float)) else str(long_val)
+                        short_str = f"{int(short_val):,}" if isinstance(short_val, (int, float)) else str(short_val)
+                        ratio_str = f"{float(ratio_val):+.2f}%" if isinstance(ratio_val, (int, float)) else str(ratio_val)
+                        
+                        return {
+                            "date": raw_date,
+                            "price": price_str,
+                            "long": long_str,
+                            "short": short_str,
+                            "ratio": ratio_str
+                        }
+                except Exception as e:
+                    print(f"解析 JSON State 失敗: {e}")
+
+            # 備用方案 2: 直接從 DOM HTML <table> 表格精準提取
+            table = soup.find("table")
+            if table:
+                rows = table.find("tbody").find_all("tr") if table.find("tbody") else table.find_all("tr")[1:]
+                if rows:
+                    cols = [cell.text.strip() for cell in rows[0].find_all(["td", "th"])]
+                    if len(cols) >= 6:
+                        # cols: [0]日期, [1]加權指數, [2]散戶多單, [3]散戶空單, [4]散戶淨部位, [5]散戶多空比
+                        return {
+                            "date": cols[0].replace("-", "/"),
+                            "price": cols[1],
+                            "long": cols[2],
+                            "short": cols[3],
+                            "ratio": cols[5]
+                        }
+
     except Exception as e:
-        print(f"解析發生例外錯誤: {e}")
+        print(f"爬取過程發生例外錯誤: {e}")
         
     return None
 
@@ -90,7 +97,8 @@ def main():
         data = fetch_data()
         print(f"爬取結果: {data}")
 
-        if data and data['date'] == today_str:
+        # 只要抓到資料，且日期符合今天，即送出推播
+        if data and (data['date'] == today_str or data['date'].replace("-", "/") == today_str):
             msg = (
                 f"【微台指散戶多空比已更新】\n"
                 f"日期：{data['date']}\n"
@@ -101,7 +109,7 @@ def main():
             send_telegram_msg(msg)
             print("已成功發送通知！")
         else:
-            print(f"今日 ({today_str}) 資料尚未更新，結束本次執行。")
+            print(f"今日 ({today_str}) 資料尚未更新或日期不符合，結束本次執行。")
     except Exception as e:
         print(f"執行過程發生錯誤: {e}")
 
