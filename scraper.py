@@ -1,6 +1,6 @@
 def fetch_data():
-    # 修正後的正確 API 網址與完整的 HTTP Headers
-    url = "https://blave.org/api/studio/twstock/zh/market/futures-retail-long-short-ratio?symbol=wtm"
+    # 移除 /zh/ 路徑，這才是 Blave 真正的 JSON API 端點
+    url = "https://blave.org/api/studio/twstock/market/futures-retail-long-short-ratio?symbol=wtm"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
@@ -15,8 +15,9 @@ def fetch_data():
 
         json_data = response.json()
         
-        # 取得列表的第一筆資料 (最新日期的資料)
+        # Blave API 回傳結構通常在 json_data["data"] 或直接是 list
         items = json_data.get("data", []) if isinstance(json_data, dict) else json_data
+        
         if items and isinstance(items, list):
             latest = items[0]
             
@@ -36,7 +37,7 @@ def fetch_data():
                 "ratio": ratio
             }
         else:
-            print("API 回傳資料結構為空")
+            print(f"API 回傳資料結構為空: {json_data}")
     except Exception as e:
         print(f"解析發生錯誤: {e}")
         
