@@ -2,10 +2,10 @@ name: Daily Retail Ratio Scraper
 
 on:
   schedule:
-    # UTC 時間 06:30 等於台灣時間 (UTC+8) 14:30
+    # UTC 時間 06:47 等於台灣時間 (UTC+8) 14:47
     # 1-5 代表週一至週五 (Monday to Friday)
     - cron: '47 6 * * 1-5'
-  
+
   # 支援在 GitHub 網頁上記錄與手動觸發執行
   workflow_dispatch:
 
@@ -24,11 +24,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 3. 安裝 Python 套件
+      # 3. 安裝 Python 套件 (加入 cloudscraper 解決 403 問題)
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install requests beautifulsoup4 cloudscraper
 
       # 4. 執行爬蟲腳本並帶入 Secrets 變數
       - name: Run Scraper Script
