@@ -1,6 +1,5 @@
 import os
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 
 # 設定台灣時區 (UTC+8)
@@ -23,9 +22,11 @@ def send_telegram_msg(message):
         print(f"發送通知失敗: {e}")
 
 def fetch_data():
-    url = "https://blave.org/studio/twstock/zh/market/futures_retail_long_short_ratio"
+    # 直接請求 Blave 的微台指散戶多空比數據 API
+    url = "https://blave.org/api/studio/twstock/market/futures-retail-long-short-ratio?symbol=wtm"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*"
     }
     
     try:
@@ -34,32 +35,31 @@ def fetch_data():
             print(f"請求失敗，HTTP 狀態碼: {response.status_code}")
             return None
 
-        soup = BeautifulSoup(response.text, 'html.parser')
-        table = soup.find('table')
-        if not table:
-            print("找不到表格")
-            return None
-
-        # 找到 tbody 中的第一列 (最新日期的資料)
-        tbody = table.find('tbody')
-        rows = tbody.find_all('tr') if tbody else table.find_all('tr')[1:]
+        json_data = response.json()
         
-        if rows:
-            # 抓取第一列中所有的 th 及 td 子元素
-            cols = [cell.text.strip() for cell in rows[0].find_all(['th', 'td'])]
+        # 取得列表的第一筆資料 (最新日期的資料)
+        items = json_data.get("data", []) if isinstance(json_data, dict) else json_data
+        if items and isinstance(items, list):
+            latest = items[0]
             
-            # 欄位依序為：日期、加權指數、散戶多單、散戶空單、散戶淨部位、散戶多空比
-            if len(cols) >= 6:
-                date_formatted = cols[0].replace("-", "/")
-                return {
-                    "date": date_formatted,
-                    "price": cols[1],
-                    "long": cols[2],
-                    "short": cols[3],
-                    "ratio": cols[5]
-                }
-            else:
-                print(f"欄位數量不足，實際抓到 {len(cols)} 個欄位: {cols}")
+            # API 回傳格式為 "2026-10-02" 轉換為 "2026/10/02"
+            raw_date = str(latest.get("date", "")).replace("-", "/")
+            
+            # 格式化數值
+            price = f"{latest.get('close', 0):,}" if latest.get('close') else str(latest.get('price', ''))
+            long_cnt = f"{latest.get('long', 0):,}" if latest.get('long') else str(latest.get('long', ''))
+            short_cnt = f"{latest.get('short', 0):,}" if latest.get('short') else str(latest.get('short', ''))
+            ratio = f"{latest.get('ratio', 0):+.2f}%" if latest.get('ratio') is not None else str(latest.get('ratio', ''))
+            
+            return {
+                "date": raw_date,
+                "price": price,
+                "long": long_cnt,
+                "short": short_cnt,
+                "ratio": ratio
+            }
+        else:
+            print("API 回傳資料結構為空")
     except Exception as e:
         print(f"解析發生錯誤: {e}")
         
