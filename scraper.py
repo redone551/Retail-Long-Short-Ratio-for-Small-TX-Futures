@@ -24,17 +24,7 @@ def send_telegram_msg(message):
 
 def fetch_data():
     url = "https://www.wantgoo.com/futures/retail-indicator/wtm"
-    api_data = []
-
-    def handle_response(response):
-        # 攔截玩股網背景發送的 wtm-data API
-        if "wtm-data" in response.url and response.status == 200:
-            try:
-                nonlocal api_data
-                api_data = response.json()
-            except Exception as e:
-                print(f"解析背景 API JSON 失敗: {e}")
-
+    
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -43,11 +33,16 @@ def fetch_data():
             )
             page = context.new_page()
             
-            # 監聽網路回應，自動捕捉背景 API 資料
-            page.on("response", handle_response)
+            print("正在透過瀏覽器載入玩股網頁面...")
             
-            print("正在透過瀏覽器載入玩股網頁面並攔截 API...")
-            page.goto(url, wait_until="networkidle", timeout=30000)
+            # 監聽特地目標：等待包含 wtm-data 的 API 回應
+            with page.expect_response(lambda response: "wtm-data" in response.url and response.status == 200, timeout=20000) as response_info:
+                # 使用 domcontentloaded 避免被網頁廣告/追蹤封包拖到逾時
+                page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            
+            # 取得 API 的 JSON 結果
+            api_response = response_info.value
+            api_data = api_response.json()
             
             browser.close()
             
